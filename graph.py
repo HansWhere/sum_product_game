@@ -143,17 +143,20 @@ def strict_n_step_chains(maximum: int, step_upper: int, step_lower: int = 1) -> 
 
     return SPG(G.graph.subgraph(subgraph_nodes), {})
 
-def deg_n_nodes(maximum: int, deg: int):
+def deg_n_prod_nodes(maximum: int, deg: int, sum_lower_bound: int):
     G = SPG.by_max(maximum)
     counter = 0
     subgraph_edges = set()
     for node in G.graph:
         if G.graph.degree(node) == deg and re.match(r'P(\d*)', node) is not None:
-            counter += 1
-            for edge in G.graph.edges(node):
-                subgraph_edges.add(edge)
-    print(counter)
-    return SPG(G.graph.edge_subgraph(subgraph_edges), {})
+            for neighbor in G.graph.neighbors(node):
+                if neighbor < sum_lower_bound:
+                    break
+            else:
+                counter += 1
+                for edge in G.graph.edges(node):
+                    subgraph_edges.add(edge)
+    return counter, SPG(G.graph.edge_subgraph(subgraph_edges), {})
 
 def deg_n_highlight(maximum: int, deg: int):
     G = SPG.by_max(maximum)
@@ -196,6 +199,13 @@ def substructrue_diamond(maximum: int, sum_lower_bound: int):
                             diamonds.append([node, neighbor1, neighbor2, nn])
     return diamonds, diamond_nodes
 
+def substructrue_chains(maximum: int):
+    G = SPG.by_max(maximum)
+    chain_xs = []
+    while leaves := G.rot():
+        chain_xs += leaves
+    return chain_xs
+
 @timing
 def main():
     # xs = [(n,SPG_stats(n,('game_life','last_leaves'))) for n in range(2, 1000)]
@@ -227,11 +237,18 @@ def main():
     # G5.plot(9)
 
     n = 50
-    xs = [len(substructrue_diamond(50, i)[0]) for i in range(4, n)]
-    ys = [math.log(d/(n-i/2), n) for i in range(4, 2*n) if (d := len(substructrue_diamond(n, i)[0])) > 0]
+    xs = [len(substructrue_diamond(50, i)[0]) for i in range(4, 2*n)]
+    ys = [(math.log(d, n)+2)/math.log(n-i/2, n) for i in range(4, 2*n) if (d := len(substructrue_diamond(n, i)[0])) > 0]
+    print(xs)
     print(ys)
-    # G6 = SPG.by_max(20, lambda node: node in substructrue_diamond(20, 20)[1])
-    # G6.plot(10)
+    G6 = SPG.by_max(30, lambda node: node in substructrue_diamond(30, 2)[1])
+    G6.plot(10)
+
+    # G8 = SPG.by_max(20, lambda node: node in deg_n_prod_nodes(20, 3)[1].graph)
+    # G8.plot(12)
+    #
+    # xs8 = [deg_n_prod_nodes(n, 3, i)[0] for i in range(4, n)]
+
 
 
 main()

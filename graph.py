@@ -1,12 +1,14 @@
 import math
 import re
 
+import numpy as np
 import networkx as nx
 from itertools import combinations_with_replacement, combinations, chain
 import matplotlib.pyplot as plt
 from typing import *
 from time import time
-
+from sklearn.linear_model import LogisticRegression
+from scipy.optimize import curve_fit
 
 def timing(f):
     def timing_f(*args, **kwargs):
@@ -195,8 +197,8 @@ def substructrue_diamond(maximum: int, sum_lower_bound: int):
                     for nn in G.graph.neighbors(neighbor1):
                         if nn not in diamond_leading_nodes and nn in G.graph.neighbors(neighbor2) \
                                 and int(re.match(r'S(\d*)', nn)[1]) >= sum_lower_bound:
-                            diamond_nodes.update([node, neighbor1, neighbor2, nn])
-                            diamonds.append([node, neighbor1, neighbor2, nn])
+                            diamond_nodes.update([node, nn, neighbor1, neighbor2])
+                            diamonds.append([node, nn, neighbor1, neighbor2])
     return diamonds, diamond_nodes
 
 def substructrue_chains(maximum: int):
@@ -206,49 +208,115 @@ def substructrue_chains(maximum: int):
         chain_xs += leaves
     return chain_xs
 
+def induced_sum_diamond_diagram(maximum: int):
+    graph = nx.Graph()
+    for s_edge in [[int(p[1:]) for p in ps[0:2]] for ps in substructrue_diamond(maximum, 2)[0]]:
+        graph.add_edge(*s_edge)
+    return graph
+
+def diamond_upper_curve(a_plus_b: int):
+    ...
+
+def diamond_sum_nodes_til(maximum: int):
+    xs_s = [[int(p[1:]) for p in ps[0:2]] for ps in substructrue_diamond(maximum, 0)[0]]
+    xs_til_s = [[p[0] + p[1], p[1] - p[0]] for p in xs_s]
+    return xs_til_s
+
+def diamond_scatter_til(maximum: int, color: str = 'red'):
+    xas_til_s = np.array(diamond_sum_nodes_til(maximum))
+    ps_til_s = xas_til_s.transpose()
+    plt.scatter(ps_til_s[0], ps_til_s[1], c=color)
+
+def diamond_scatter_til_parity(maximum: int, AmB_bound: int):
+    xs_til_s = [p for p in diamond_sum_nodes_til(maximum) if p[1] <= AmB_bound]
+    ps_til_s_same = np.array([p for p in xs_til_s if p[0] % 2 == 0]).transpose()
+    ps_til_s_diff = np.array([p for p in xs_til_s if p[0] % 2 == 1]).transpose()
+    plt.scatter(ps_til_s_same[0], ps_til_s_same[1], c='red')
+    plt.scatter(ps_til_s_diff[0], ps_til_s_diff[1], c='blue')
+
+def density_of_tails(maximum: int, AmB_bound: int):
+    all_diamonds = [p for p in substructrue_diamond(maximum, 0)[0] if int(p[0][1:]) - int(p[1][1:]) <= AmB_bound]
+    diamond_fishes = [p for p in substructrue_diamond(maximum, 0)[0] if (int(p[0][1:]) - int(p[1][1:])) % 2 == 0]
+    return len(diamond_fishes) / len(all_diamonds)
+    # xs = [p for p in diamond_sum_nodes_til(maximum) if p[1] <= AmB_bound]
+    # xs_same = [p for p in xs if p[0] % 2 == 0]
+    # return len(xs_same)/len(xs)
+
+def diamond_minimize_B(maximum: int):
+    return max(*diamond_sum_nodes_til(maximum), key=lambda p: p[1])
+
+def eight_factors(ApB: int, AmB: int):
+    ...
+
 @timing
 def main():
-    # xs = [(n,SPG_stats(n,('game_life','last_leaves'))) for n in range(2, 1000)]
-    # print(xs)
-    # xs = [x[0] for n in range(10, 1000) if not ((x := (n, SPG_stats(n, ('game_life',))))[1][0] % 2 or x[1][0] == 6)]
-    # print(xs)
-    # print(f'the longest game life is {max(xs)}')
-    # # SPG_stats(20,('chains',))[0].plot()
-    # ll98 = SPG_stats(98, ('last_leaves',))[0]
-    # lc98 = longest_chain(98)
-    # lc98.plot(options={'node_color': ['red' if node in ll98 else 'pink' if node.startswith('S') else 'lightblue' for node in lc98.graph]})
-    # ll99 = SPG_stats(99, ('last_leaves',))[0]
-    # lc99 = longest_chain(99)
-    # lc99.plot(2, options={'node_color': ['red' if node in ll99 else 'pink' if node.startswith('S') else 'lightblue' for node in lc99.graph]})
-    # G1 = deg_n_highlight(20, 3)
-    # G1_sub = deg_n_nodes(20, 3)
-    # G1.plot(4)
-    # G1_sub.plot(5)
+    N = 30
+    # plt.figure(99,igsize=(6,6))
+    # gN = SPG.by_max(N, highlights_cond=lambda p: p in substructrue_diamond(N,0)[1])
+    # gN.plot(99)
+    # all_diamonds = substructrue_diamond(N, 0)[0]
+    # diamond_fishes = [p for p in substructrue_diamond(N, 0)[0] if (int(p[0][1:]) - int(p[1][1:])) % 2 == 0]
+    # print(len(diamond_fishes)/len(all_diamonds))
 
-    # G2 = embed_graph(26, 19)
-    # G3 = embed_graph(27, 19)
-    # G4 = embed_graph(28, 19)
-    # G2.plot(6)
-    # G3.plot(7)
-    # G4.plot(8)
+    # xs = [len(substructrue_diamond(N, i)[0]) for i in range(4, 2*N)]
+    # xs_sp = [[[int(p[1:]) for p in ps] for ps in substructrue_diamond(N, i)[0]] for i in range(4, 2 * N)]
+    # xs_s = [[int(p[1:]) for p in ps[0:2]] for ps in substructrue_diamond(N, 0)[0]]
+    # xs_til_s = [[p[0]+p[1], p[1]-p[0]] for p in xs_s]
 
-    # print(nlife := unlooped_lifetime('S10'))
-    # G5 = SPG.by_max(nlife, lambda node: node == 'S10')
-    # G5.plot(9)
+    # xs_til_s = [[int(ps[0][1:]),int(ps[1][1:])] for ps in substructrue_diamond(N, 0)[0]]
 
-    n = 50
-    xs = [len(substructrue_diamond(50, i)[0]) for i in range(4, 2*n)]
-    ys = [(math.log(d, n)+2)/math.log(n-i/2, n) for i in range(4, 2*n) if (d := len(substructrue_diamond(n, i)[0])) > 0]
-    print(xs)
-    print(ys)
-    G6 = SPG.by_max(30, lambda node: node in substructrue_diamond(30, 2)[1])
-    G6.plot(10)
+    # plt.figure(99, figsize=(6,6))
+    # nas = np.arange(4, 2*N).reshape(-1,1)
+    # xas = np.array(xs)
+    # xas_s = np.array(xs_s)
+    # xas_til_s = np.array(xs_til_s)
+    # print(xas_s)
+    # mid_index = len([1 for x in xs if x > math.floor(xas[0]/2)])
+    # print(mid_index)
+    # dxas = np.array(xs) - np.array(xs[1:]+[0])
+    # plt.plot(nas, xas, 'go-', label='diamonds#', linewidth=2)
 
-    # G8 = SPG.by_max(20, lambda node: node in deg_n_prod_nodes(20, 3)[1].graph)
-    # G8.plot(12)
+    # plt.figure(100, figsize=(6, 6))
+    # plt.plot(nas, dxas, 'ro-', label='diff diamonds#', linewidth=2)
+
+    #  fplt.figure(101,igsize=(6,6))
+    # ps_s = xas_s.transpose()
+    # ps_til_s = xas_til_s.transpose()
+    # plt.scatter(ps_s[0], ps_s[1])
+    # plt.scatter(ps_til_s[0], ps_til_s[1])
+
+    # plt.figure(102, figsize=(6,6))
+    # induce_diag = induced_sum_diamond_diagram(N)
+    # nx.draw_networkx(induce_diag, nx.nx_agraph.graphviz_layout(induce_diag))
+
+    # print(max(diamond_sum_nodes_til(150), key=lambda p: p[1]))
+    # print([p for p in diamond_sum_nodes_til(100) if p[1] == 60])
+    # print([p for p in diamond_sum_nodes_til(100) if p[0] == 126])
+
+    # plt.figure(101, figsize=(6, 6))
     #
-    # xs8 = [deg_n_prod_nodes(n, 3, i)[0] for i in range(4, n)]
+    # bound_slope = max((p[1]-4)/(p[0]-30) for p in diamond_sum_nodes_til(500) if p[0] != 30)
+    # print(bound_slope)
+    # x = np.linspace(30, 400, 100)
+    # y = bound_slope * (x-30) + 4
+    x = np.linspace(0, 400, 100)
+    y = x - 4 * x ** (3/4)
+    plt.plot(x, y)
+    diamond_scatter_til_parity(200,400)
+    print(density_of_tails(200,400))
+    # diamond_scatter_til(500, color='violet')
+    # diamond_scatter_til(250, color='blue')
+    # diamond_scatter_til(200, color='green')
+    # diamond_scatter_til(150, color='yellow')
+    # diamond_scatter_til(100, color='orange')
+    # diamond_scatter_til(50, color='red')
+    # plt.plot(x, y)
 
+    # N = 250
+    # g300 = SPG.by_max(300)
+    # print(diamond_minimize_B(300))
+    # plt.figure(102, figsize=(6, 6))
+    # plt.scatter(range(20,N), [diamond_minimize_B(i)[1] for i in range(20, N)])
 
 
 main()

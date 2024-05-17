@@ -32,7 +32,7 @@ G.remove_nodes_from(leaves)
 color_map = ['pink' if node.startswith('S') else 'lightblue' for node in G]
 options['node_color'] = color_map
 
-plt.figure(2, (10, 6))
+plt.figure(2, (6, 10))
 nx.draw(G, nx.nx_agraph.graphviz_layout(G), **options)
 
 # leaves left after 4 levels of removal

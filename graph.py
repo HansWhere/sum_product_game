@@ -10,12 +10,14 @@ from time import time
 from sklearn.linear_model import LogisticRegression
 from scipy.optimize import curve_fit
 
+
 def timing(f):
     def timing_f(*args, **kwargs):
         start_time = time()
         result = f(*args, **kwargs)
         print("--- %s seconds ---" % (time() - start_time))
         return result
+
     return timing_f
 
 
@@ -33,7 +35,7 @@ class SPG:
             edge = (f'S{i + j}', f'P{i * j}')
             edge_labels[edge] = f'{i}:{j}'
             graph.add_edge(*edge, _=(i, j))
-        G = SPG(graph,edge_labels)
+        G = SPG(graph, edge_labels)
         if highlights_cond is not None:
             for index, node in enumerate(G.graph):
                 if highlights_cond(node):
@@ -64,6 +66,10 @@ class SPG:
 
     def rot(self) -> List:
         self.graph.remove_nodes_from(res := self.leaves())
+        self.colors = ['pink' if node.startswith('S') else 'lightblue' for node in self.graph]
+        self.edge_labels = dict([(key, self.edge_labels[key]) for key in self.edge_labels.keys() if
+                                 key[0] not in res and key[1] not in res])
+        print(self.edge_labels)
         return res
 
     def succ(self) -> 'SPG':
@@ -77,6 +83,7 @@ class SPG:
         while g.rot():
             count += 1
         return count
+
 
 def SPG_stats(maximum: int, modes=()) -> List:
     G = SPG.by_max(maximum)
@@ -105,11 +112,13 @@ def SPG_stats(maximum: int, modes=()) -> List:
             return res
         life_count += 1
 
+
 def longest_chain(maximum: int) -> SPG:
     last_leaves, chains = SPG_stats(maximum, ('last_leaves', 'chains'))
     nodes = nx.node_connected_component(chains.graph, last_leaves[0])
     chains.graph.remove_nodes_from([n for n in chains.graph if n not in nodes])
     return chains
+
 
 def n_step_chains(maximum: int, step_upper: int, step_lower: int = 1) -> SPG:
     G = SPG.by_max(maximum)
@@ -145,6 +154,7 @@ def strict_n_step_chains(maximum: int, step_upper: int, step_lower: int = 1) -> 
 
     return SPG(G.graph.subgraph(subgraph_nodes), {})
 
+
 def deg_n_prod_nodes(maximum: int, deg: int, sum_lower_bound: int):
     G = SPG.by_max(maximum)
     counter = 0
@@ -160,12 +170,14 @@ def deg_n_prod_nodes(maximum: int, deg: int, sum_lower_bound: int):
                     subgraph_edges.add(edge)
     return counter, SPG(G.graph.edge_subgraph(subgraph_edges), {})
 
+
 def deg_n_highlight(maximum: int, deg: int):
     G = SPG.by_max(maximum)
     for index, node in enumerate(G.graph):
         if G.graph.degree(node) == deg:
             G.colors[index] = 'blue' if re.match(r'P(\d*)', node) is not None else 'red'
     return G
+
 
 def embed_graph(maximum: int, maximum_sub: int):
     G = SPG.by_max(maximum)
@@ -175,6 +187,7 @@ def embed_graph(maximum: int, maximum_sub: int):
             G.colors[index] = 'blue' if re.match(r'P(\d*)', node) is not None else 'red'
     return G
 
+
 def unlooped_lifetime(node: str):
     maximum = 4
     while True:
@@ -183,6 +196,7 @@ def unlooped_lifetime(node: str):
             if node in res:
                 return maximum
         maximum += 1
+
 
 def substructrue_diamond(maximum: int, sum_lower_bound: int):
     G = SPG.by_max(maximum)
@@ -201,6 +215,7 @@ def substructrue_diamond(maximum: int, sum_lower_bound: int):
                             diamonds.append([node, nn, neighbor1, neighbor2])
     return diamonds, diamond_nodes
 
+
 def substructrue_chains(maximum: int):
     G = SPG.by_max(maximum)
     chain_xs = []
@@ -208,116 +223,232 @@ def substructrue_chains(maximum: int):
         chain_xs += leaves
     return chain_xs
 
+class Diamond:
+    def __init__(self, A, a1, a2, B, b1, b2):
+        self.A = A
+        self.a1 = a1
+        self.a2 = a2
+        self.B = B
+        self.b1 = b1
+        self.b2 = b2
+        self.P1 = (A**2 - a1**2) // 4  # = (B**2 - b1**2) // 4
+        self.P2 = (A**2 - a2**2) // 4  # = (B**2 - b2**2) // 4
+
+    @staticmethod
+    def from_SSPP(S1, S2, P1, P2):
+        return Diamond(A=S1,
+                       a1=math.sqrt(S1 ** 2 - 4 * P1),
+                       a2=math.sqrt(S1 ** 2 - 4 * P2),
+                       B=S2,
+                       b1=math.sqrt(S2 ** 2 - 4 * P1),
+                       b2=math.sqrt(S2 ** 2 - 4 * P2),
+                       )
+
+    @staticmethod
+    def from_4nodes(dia):
+        return Diamond.from_SSPP(*[int(node[1:]) for node in dia])
+
+    def __repr__(self):
+        return f"(A={self.A}, a1={self.a1}, a2={self.a2}, B={self.B}, b1={self.b1}, b2={self.b2}, P1={self.P1}, P2={self.P2})"
+
 def induced_sum_diamond_diagram(maximum: int):
     graph = nx.Graph()
     for s_edge in [[int(p[1:]) for p in ps[0:2]] for ps in substructrue_diamond(maximum, 2)[0]]:
         graph.add_edge(*s_edge)
     return graph
 
+
 def diamond_upper_curve(a_plus_b: int):
     ...
 
-def diamond_sum_nodes_til(maximum: int):
+# {s = x + y, d = x - y}, Tsd represents this kind of replacement
+def diamond_sum_nodes_Tsd(maximum: int):
     xs_s = [[int(p[1:]) for p in ps[0:2]] for ps in substructrue_diamond(maximum, 0)[0]]
-    xs_til_s = [[p[0] + p[1], p[1] - p[0]] for p in xs_s]
-    return xs_til_s
+    xs_Tsd_s = [[p[0] + p[1], p[1] - p[0]] for p in xs_s]
+    return xs_Tsd_s
 
-def diamond_scatter_til(maximum: int, color: str = 'red'):
-    xas_til_s = np.array(diamond_sum_nodes_til(maximum))
-    ps_til_s = xas_til_s.transpose()
-    plt.scatter(ps_til_s[0], ps_til_s[1], c=color)
 
-def diamond_scatter_til_parity(maximum: int, AmB_bound: int):
-    xs_til_s = [p for p in diamond_sum_nodes_til(maximum) if p[1] <= AmB_bound]
-    ps_til_s_same = np.array([p for p in xs_til_s if p[0] % 2 == 0]).transpose()
-    ps_til_s_diff = np.array([p for p in xs_til_s if p[0] % 2 == 1]).transpose()
-    plt.scatter(ps_til_s_same[0], ps_til_s_same[1], c='red')
-    plt.scatter(ps_til_s_diff[0], ps_til_s_diff[1], c='blue')
+def estimate_epsilon(maximum: int):
+    # to find out the constant epsilon such that the line "sqrt(D) = sqrt(S) + epsilon" bounds the scatter
+    xs_s = [[int(p[1:]) for p in ps[0:2]] for ps in substructrue_diamond(maximum, 0)[0]]
+    epsilon = maximum
+    result_p = ()
+    for dia in substructrue_diamond(maximum, 0)[0]:
+        # print(epsilon)
+        s0 = int(dia[0][1:])
+        s1 = int(dia[1][1:])
+        if (next_epsilon := math.sqrt(int(s0 + s1) - math.sqrt(s0 + s1))) < epsilon:
+            epsilon = next_epsilon
+            result_p = dia
+    return epsilon, Diamond.from_4nodes(result_p)
+
+
+def diamond_sum_nodes_AB(maximum: int):
+    return [[int(p[1:]) for p in ps[0:2]] for ps in substructrue_diamond(maximum, 0)[0]]
+
+
+def diamond_sum_nodes_sqTsd(maximum: int):
+    xs_s = [[int(p[1:]) for p in ps[0:2]] for ps in substructrue_diamond(maximum, 0)[0]]
+    xs_sqTsd_s = [[math.sqrt(p[0] + p[1]), math.sqrt(p[1] - p[0])] for p in xs_s]
+    return xs_sqTsd_s
+
+
+def diamond_scatter_AB(maximum: int, color: str = 'red'):
+    xas_AB_s = np.array(diamond_sum_nodes_AB(maximum))
+    ps_AB_s = xas_AB_s.transpose()
+    plt.scatter(ps_AB_s[0], ps_AB_s[1], c=color)
+
+
+def diamond_scatter_Tsd(maximum: int, color: str = 'red'):
+    x = np.linspace(0, 4*maximum, 100)
+    y = np.array([(-math.sqrt(xi) + 2*math.sqrt(maximum)) ** 2 for xi in x])
+    xas_Tsd_s = np.array(diamond_sum_nodes_Tsd(maximum))
+    ps_Tsd_s = xas_Tsd_s.transpose()
+    plt.scatter(ps_Tsd_s[0], ps_Tsd_s[1], c=color)
+    plt.plot(x,y)
+
+
+def diamond_scatter_sqTsd(maximum: int, color: str = 'red'):
+    xas_sqTsd_s = np.array(diamond_sum_nodes_sqTsd(maximum))
+    ps_sqTsd_s = xas_sqTsd_s.transpose()
+    plt.scatter(ps_sqTsd_s[0], ps_sqTsd_s[1], c=color)
+
+
+def diamond_sqS_vs_sqD_scatter(maximum: int, scatter_color: str = 'red'):
+    sqS = np.linspace(0, 2 * math.sqrt(maximum), 100)
+    sqD = np.array([-sqS_i + 2 * math.sqrt(maximum) for sqS_i in sqS])
+    diamond_scatter_sqTsd(maximum, color=scatter_color)
+    plt.plot(sqS, sqD)
+
+
+def diamond_scatter_sd(maximum: int, color: str = 'red'):
+    xas_Tsd_s = np.array(diamond_sum_nodes_Tsd(maximum))
+    ps_Tsd_s = xas_Tsd_s.transpose()
+    plt.scatter(ps_Tsd_s[0], ps_Tsd_s[0] * ps_Tsd_s[1] / maximum, c=color)
+
+
+def diamond_scatter_Tsd_parity(maximum: int, AmB_bound: int):
+    xs_Tsd_s = [p for p in diamond_sum_nodes_Tsd(maximum) if p[1] <= AmB_bound]
+    ps_Tsd_s_same = np.array([p for p in xs_Tsd_s if p[0] % 2 == 0]).transpose()
+    ps_Tsd_s_diff = np.array([p for p in xs_Tsd_s if p[0] % 2 == 1]).transpose()
+    plt.scatter(ps_Tsd_s_same[0], ps_Tsd_s_same[1], c='red')
+    plt.scatter(ps_Tsd_s_diff[0], ps_Tsd_s_diff[1], c='blue')
+
+
+def diamond_scatter_Tsd_parity_sqrt(maximum: int, AmB_bound: int):
+    xs_Tsd_s = [p for p in diamond_sum_nodes_Tsd(maximum) if p[1] <= AmB_bound]
+    ps_Tsd_s_same = np.array([[math.sqrt(p[0]), math.sqrt(p[1])] for p in xs_Tsd_s if p[0] % 2 == 0]).transpose()
+    ps_Tsd_s_diff = np.array([[math.sqrt(p[0]), math.sqrt(p[1])] for p in xs_Tsd_s if p[0] % 2 == 1]).transpose()
+    plt.scatter(ps_Tsd_s_same[0], ps_Tsd_s_same[1], c='red')
+    plt.scatter(ps_Tsd_s_diff[0], ps_Tsd_s_diff[1], c='blue')
+
 
 def density_of_tails(maximum: int, AmB_bound: int):
     all_diamonds = [p for p in substructrue_diamond(maximum, 0)[0] if int(p[0][1:]) - int(p[1][1:]) <= AmB_bound]
     diamond_fishes = [p for p in substructrue_diamond(maximum, 0)[0] if (int(p[0][1:]) - int(p[1][1:])) % 2 == 0]
     return len(diamond_fishes) / len(all_diamonds)
-    # xs = [p for p in diamond_sum_nodes_til(maximum) if p[1] <= AmB_bound]
+    # xs = [p for p in diamond_sum_nodes_Tsd(maximum) if p[1] <= AmB_bound]
     # xs_same = [p for p in xs if p[0] % 2 == 0]
     # return len(xs_same)/len(xs)
 
+
 def diamond_minimize_B(maximum: int):
-    return max(*diamond_sum_nodes_til(maximum), key=lambda p: p[1])
+    return max(*diamond_sum_nodes_Tsd(maximum), key=lambda p: p[1])
+
 
 def eight_factors(ApB: int, AmB: int):
     ...
 
+
+def life_time_of_sum_node(maximum: int):
+    G = SPG.by_max(maximum)
+    life_sums = [0 for _ in range(2 * maximum + 1)]
+    current_turn = 0
+    while leaves := G.rot():
+        for leaf in leaves:
+            if sum_matched := re.match(r'S(\d*)', leaf):
+                print(leaf)
+                life_sums[int(sum_matched[1])] = current_turn
+        current_turn += 1
+    for loop_node in G.graph:
+        if sum_matched := re.match(r'S(\d*)', loop_node):
+            print(loop_node, "!")
+            life_sums[int(sum_matched[1])] = -1
+    return life_sums
+
+
+def minimized_N_to_make_sum_node_immortal(maximum_N: int):
+    minN_of_sums = [0 for _ in range(2 * maximum_N + 1)]
+    visited_sums = set()
+    for maximum in range(maximum_N):
+        G = SPG.by_max(maximum)
+        while G.rot():
+            pass
+        for loop_node in G.graph:
+            if loop_node not in visited_sums \
+                    and (sum_matched := re.match(r'S(\d*)', loop_node)):
+                visited_sums.add(loop_node)
+                minN_of_sums[int(sum_matched[1])] = maximum - ...
+    return minN_of_sums
+
+
+#
+# class Diamond:
+#     def __init__(self, A, B, a1, a2, b1, b2):
+#         self.A = A      # A is the larger sum node
+#         self.B = B      # B is the smaller sum node
+#         self.a1 = a1
+#         self.a2 = a2
+#         self.b1 = b1
+#         self.b2 = b2
+#         self.P1 = p1    # p1 = (A/2)^2 - (a1/2)^2 = (B/2)^2 - (b1/2)^2
+#         self.P2 = p2    # p2 = (A/2)^2 - (a2/2)^2 = (B/2)^2 - (b2/2)^2
+#
+#
+#     def from_sd_point(self, ): # s = A + B, d = A - B
+
+
 @timing
 def main():
-    N = 30
-    # plt.figure(99,igsize=(6,6))
-    # gN = SPG.by_max(N, highlights_cond=lambda p: p in substructrue_diamond(N,0)[1])
-    # gN.plot(99)
-    # all_diamonds = substructrue_diamond(N, 0)[0]
-    # diamond_fishes = [p for p in substructrue_diamond(N, 0)[0] if (int(p[0][1:]) - int(p[1][1:])) % 2 == 0]
-    # print(len(diamond_fishes)/len(all_diamonds))
+    # ===================================
+    N = 200
+    Epsilon = math.sqrt(30) - 2
 
-    # xs = [len(substructrue_diamond(N, i)[0]) for i in range(4, 2*N)]
-    # xs_sp = [[[int(p[1:]) for p in ps] for ps in substructrue_diamond(N, i)[0]] for i in range(4, 2 * N)]
-    # xs_s = [[int(p[1:]) for p in ps[0:2]] for ps in substructrue_diamond(N, 0)[0]]
-    # xs_til_s = [[p[0]+p[1], p[1]-p[0]] for p in xs_s]
+    diamond_scatter_AB(250, color='blue')
+    diamond_scatter_AB(200, color='green')
+    diamond_scatter_AB(150, color='yellow')
+    diamond_scatter_AB(100, color='orange')
 
-    # xs_til_s = [[int(ps[0][1:]),int(ps[1][1:])] for ps in substructrue_diamond(N, 0)[0]]
+    # ===================================
 
-    # plt.figure(99, figsize=(6,6))
-    # nas = np.arange(4, 2*N).reshape(-1,1)
-    # xas = np.array(xs)
-    # xas_s = np.array(xs_s)
-    # xas_til_s = np.array(xs_til_s)
-    # print(xas_s)
-    # mid_index = len([1 for x in xs if x > math.floor(xas[0]/2)])
-    # print(mid_index)
-    # dxas = np.array(xs) - np.array(xs[1:]+[0])
-    # plt.plot(nas, xas, 'go-', label='diamonds#', linewidth=2)
+    # ===================================
+    # N = 200
+    # Epsilon = math.sqrt(30) - 2
+    # x = np.linspace(0, 4*N, 100)
+    # y = np.array([(-math.sqrt(xi) + 2*math.sqrt(N)) ** 2 for xi in x])
+    # y_left = np.array([(math.sqrt(xi) - Epsilon) ** 2 for xi in x])
 
-    # plt.figure(100, figsize=(6, 6))
-    # plt.plot(nas, dxas, 'ro-', label='diff diamonds#', linewidth=2)
-
-    #  fplt.figure(101,igsize=(6,6))
-    # ps_s = xas_s.transpose()
-    # ps_til_s = xas_til_s.transpose()
-    # plt.scatter(ps_s[0], ps_s[1])
-    # plt.scatter(ps_til_s[0], ps_til_s[1])
-
-    # plt.figure(102, figsize=(6,6))
-    # induce_diag = induced_sum_diamond_diagram(N)
-    # nx.draw_networkx(induce_diag, nx.nx_agraph.graphviz_layout(induce_diag))
-
-    # print(max(diamond_sum_nodes_til(150), key=lambda p: p[1]))
-    # print([p for p in diamond_sum_nodes_til(100) if p[1] == 60])
-    # print([p for p in diamond_sum_nodes_til(100) if p[0] == 126])
-
-    # plt.figure(101, figsize=(6, 6))
-    #
-    # bound_slope = max((p[1]-4)/(p[0]-30) for p in diamond_sum_nodes_til(500) if p[0] != 30)
-    # print(bound_slope)
-    # x = np.linspace(30, 400, 100)
-    # y = bound_slope * (x-30) + 4
-    x = np.linspace(0, 400, 100)
-    y = x - 4 * x ** (3/4)
-    plt.plot(x, y)
-    diamond_scatter_til_parity(200,400)
-    print(density_of_tails(200,400))
-    # diamond_scatter_til(500, color='violet')
-    # diamond_scatter_til(250, color='blue')
-    # diamond_scatter_til(200, color='green')
-    # diamond_scatter_til(150, color='yellow')
-    # diamond_scatter_til(100, color='orange')
-    # diamond_scatter_til(50, color='red')
+    # diamond_scatter_Tsd(500, color='violet')
+    # diamond_scatter_Tsd(250, color='blue')
+    # diamond_scatter_Tsd(200, color='green')
+    # diamond_scatter_Tsd(150, color='yellow')
+    # diamond_scatter_Tsd(100, color='orange')
     # plt.plot(x, y)
-
-    # N = 250
-    # g300 = SPG.by_max(300)
-    # print(diamond_minimize_B(300))
-    # plt.figure(102, figsize=(6, 6))
-    # plt.scatter(range(20,N), [diamond_minimize_B(i)[1] for i in range(20, N)])
-
+    # plt.plot(x, y_left)
+    # ===================================
+    # print(estimate_epsilon(200))      # 3.4641016151377544
+    # print(estimate_epsilon(300))     # 3.4641016151377535
+    #  N=1000 -> 4.9520474982524485
+    # ===================================
+    # N = 200
+    # Epsilon = 3.4641016151377535  # min(sqrt(A+B) - sqrt(A-B))
+    # sqS = np.linspace(0, 2 * math.sqrt(N), 100)
+    # sqD_left = sqS - Epsilon
+    # plt.plot(sqS, sqD_left)
+    # diamond_sqS_vs_sqD_scatter(250, scatter_color='blue')
+    # diamond_sqS_vs_sqD_scatter(200, scatter_color='green')
+    # diamond_sqS_vs_sqD_scatter(150, scatter_color='yellow')
+    # diamond_sqS_vs_sqD_scatter(100, scatter_color='orange')
 
 main()
 plt.show()
